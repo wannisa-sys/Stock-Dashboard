@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TFA Warehouse Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0f1b2b;
+    --panel:#132437;
+    --panel-2:#0d1c2c;
+    --steel:#1c3550;
+    --line:#28425e;
+    --amber:#f2a341;
+    --amber-soft:#f2a34122;
+    --teal:#4fd1c5;
+    --rose:#ef6f6c;
+    --violet:#9d8cf0;
+    --sky:#5fb0e8;
+    --paper:#eef2f6;
+    --muted:#8fa3b8;
+    --good:#5bd499;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 500px at 85% -10%, #1a3a56 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, #16304a 0%, transparent 55%),
+      var(--ink);
+    color:var(--paper);
+    font-family:'Noto Sans Thai','Space Grotesk',sans-serif;
+    min-height:100vh;
+    padding:28px 32px 60px;
+  }
+  .rack-tag{
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:.08em;
+  }
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:20px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:20px;
+    margin-bottom:26px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;
+    letter-spacing:.22em;
+    color:var(--amber);
+    text-transform:uppercase;
+    margin-bottom:8px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px;height:7px;
+    background:var(--amber);
+    display:inline-block;
+    box-shadow:0 0 0 3px var(--amber-soft);
+  }
+  h1{
+    margin:0;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:34px;
+    letter-spacing:-0.01em;
+  }
+  h1 span{color:var(--amber);}
+  .sub{
+    color:var(--muted);
+    font-size:14px;
+    margin-top:6px;
+    max-width:520px;
+  }
+  .meta{
+    text-align:right;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.9;
+  }
+  .meta b{color:var(--paper);font-weight:500;}
+
+  .kpi-row{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:14px;
+    margin-bottom:30px;
+  }
+  .kpi{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+  }
+  .kpi::after{
+    content:"";
+    position:absolute;
+    top:0;left:0;right:0;height:2px;
+    background:var(--accent,var(--amber));
+  }
+  .kpi-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:10px;
+  }
+  .kpi-value{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:28px;
+    font-weight:700;
+    line-height:1;
+  }
+  .kpi-unit{font-size:13px;color:var(--muted);font-weight:500;margin-left:4px;}
+  .kpi-foot{
+    margin-top:8px;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:18px;
+    margin-bottom:18px;
+  }
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:20px 22px 18px;
+  }
+  .card-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:4px;
+  }
+  .card-title{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:16px;
+  }
+  .card-note{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+  }
+  .card-body{
+    display:flex;
+    align-items:center;
+    gap:22px;
+    margin-top:10px;
+  }
+  .chart-wrap{
+    position:relative;
+    width:190px;
+    height:190px;
+    flex:none;
+  }
+  .center-label{
+    position:absolute;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    pointer-events:none;
+  }
+  .center-label .n{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:22px;
+    display:block;
+  }
+  .center-label .l{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9.5px;
+    color:var(--muted);
+    letter-spacing:.06em;
+  }
+  .legend{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+  .legend-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:13px;
+  }
+  .dot{
+    width:9px;height:9px;
+    border-radius:2px;
+    flex:none;
+  }
+  .legend-name{flex:1;color:var(--paper);}
+  .legend-val{
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--muted);
+    font-size:12px;
+    white-space:nowrap;
+  }
+  .legend-pct{
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--paper);
+    font-weight:600;
+    font-size:12.5px;
+    width:44px;
+    text-align:right;
+  }
+
+  .rack-strip{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:20px 22px;
+    margin-bottom:8px;
+  }
+  .rack-bars{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    margin-top:14px;
+  }
+  .rack-bar-row{display:flex;align-items:center;gap:14px;}
+  .rack-name{
+    width:150px;
+    flex:none;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+    color:var(--paper);
+  }
+  .rack-track{
+    flex:1;
+    height:10px;
+    background:#0a1826;
+    border-radius:5px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .rack-fill{
+    height:100%;
+    border-radius:5px 0 0 5px;
+  }
+  .rack-num{
+    width:110px;
+    flex:none;
+    text-align:right;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  footer{
+    margin-top:26px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    flex-wrap:wrap;
+    gap:8px;
+  }
+
+  @media (max-width: 980px){
+    .kpi-row{grid-template-columns:repeat(2,1fr);}
+    .grid{grid-template-columns:1fr;}
+    .card-body{flex-direction:column;align-items:stretch;}
+    .chart-wrap{margin:0 auto;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">Client Account · TFA</div>
+    <h1>คลังสินค้าลูกค้า <span>TFA</span></h1>
+    <div class="sub">สรุปสัดส่วนสต๊อกสินค้าจากรายการรับเข้า (Transection_Stock) เฉพาะรายการของลูกค้า TFA</div>
+  </div>
+  <div class="meta">
+    ช่วงวันที่รับเข้า &nbsp;<b>29 มิ.ย. – 22 ก.ค. 2569</b><br>
+    จำนวนรายการทั้งหมด &nbsp;<b>193 รายการ</b><br>
+    อัปเดตข้อมูลจากไฟล์ &nbsp;<b>TFA.xlsx</b>
+  </div>
+</header>
+
+<section class="kpi-row">
+  <div class="kpi" style="--accent:var(--amber)">
+    <div class="kpi-label">น้ำหนักรวม</div>
+    <div class="kpi-value">164,030<span class="kpi-unit">kg</span></div>
+    <div class="kpi-foot">จาก 193 รายการรับเข้า</div>
+  </div>
+  <div class="kpi" style="--accent:var(--sky)">
+    <div class="kpi-label">จำนวนจริงรวม (Actual Qty)</div>
+    <div class="kpi-value">6,807<span class="kpi-unit">หน่วย</span></div>
+    <div class="kpi-foot">SACK / CASE ตาม UOM</div>
+  </div>
+  <div class="kpi" style="--accent:var(--teal)">
+    <div class="kpi-label">ชนิดสินค้า</div>
+    <div class="kpi-value">5<span class="kpi-unit">รายการ</span></div>
+    <div class="kpi-foot">6 รหัสสินค้า (Product Code)</div>
+  </div>
+  <div class="kpi" style="--accent:var(--violet)">
+    <div class="kpi-label">คลังที่ใช้งาน</div>
+    <div class="kpi-value">5<span class="kpi-unit">โซน</span></div>
+    <div class="kpi-foot">B, C, D, E, F</div>
+  </div>
+  <div class="kpi" style="--accent:var(--rose)">
+    <div class="kpi-label">ล็อตสินค้า</div>
+    <div class="kpi-value">19<span class="kpi-unit">ล็อต</span></div>
+    <div class="kpi-foot">มีเอกสาร COA 143 รายการ</div>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">สัดส่วนตามหมวดหมู่สินค้า</div>
+      <div class="card-note">by weight (kg)</div>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap">
+        <canvas id="chartCategory"></canvas>
+        <div class="center-label"><span class="n">164.0t</span><span class="l">TOTAL WEIGHT</span></div>
+      </div>
+      <div class="legend" id="legendCategory"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">สัดส่วนตามชื่อสินค้า</div>
+      <div class="card-note">by weight (kg)</div>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap">
+        <canvas id="chartProduct"></canvas>
+        <div class="center-label"><span class="n">5</span><span class="l">PRODUCTS</span></div>
+      </div>
+      <div class="legend" id="legendProduct"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">สัดส่วนตามคลังจัดเก็บ (Rack)</div>
+      <div class="card-note">by weight (kg)</div>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap">
+        <canvas id="chartRack"></canvas>
+        <div class="center-label"><span class="n">5</span><span class="l">RACKS</span></div>
+      </div>
+      <div class="legend" id="legendRack"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">สถานะเอกสาร COA</div>
+      <div class="card-note">by จำนวนรายการ (count)</div>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap">
+        <canvas id="chartCoa"></canvas>
+        <div class="center-label"><span class="n">193</span><span class="l">TRANSACTIONS</span></div>
+      </div>
+      <div class="legend" id="legendCoa"></div>
+    </div>
+  </div>
+</section>
+
+<div class="rack-strip">
+  <div class="card-head">
+    <div class="card-title">น้ำหนักสะสมต่อคลัง</div>
+    <div class="card-note">kg · เรียงจากมากไปน้อย</div>
+  </div>
+  <div class="rack-bars" id="rackBars"></div>
+</div>
+
+<footer>
+  <span>ที่มา: ชีท Transection_Stock — กรองเฉพาะ Customer_Supplier = TFA (193 จาก 195 รายการ)</span>
+  <span>Dashboard สร้างโดย Claude</span>
+</footer>
+
+<script>
+const palette = {
+  amber:'#f2a341', sky:'#5fb0e8', teal:'#4fd1c5', violet:'#9d8cf0', rose:'#ef6f6c', grey:'#5b7284'
+};
+
+Chart.defaults.font.family = "'IBM Plex Mono','Noto Sans Thai',sans-serif";
+
+function donut(canvasId, labels, data, colors){
+  const ctx = document.getElementById(canvasId);
+  return new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderColor:'#0d1c2c', borderWidth:2, hoverOffset:6 }] },
+    options:{
+      cutout:'68%',
+      plugins:{ legend:{display:false}, tooltip:{
+        backgroundColor:'#0a1826', titleColor:'#eef2f6', bodyColor:'#c7d4e0',
+        borderColor:'#28425e', borderWidth:1, padding:10,
+        callbacks:{ label: c => `${c.label}: ${c.formattedValue}` }
+      }},
+      animation:{ animateRotate:true, animateScale:false }
+    }
+  });
+}
+
+function buildLegend(containerId, labels, values, colors, unit){
+  const total = values.reduce((a,b)=>a+b,0);
+  const el = document.getElementById(containerId);
+  el.innerHTML = labels.map((label,i)=>{
+    const pct = ((values[i]/total)*100).toFixed(1);
+    return `<div class="legend-row">
+      <span class="dot" style="background:${colors[i]}"></span>
+      <span class="legend-name">${label}</span>
+      <span class="legend-val">${values[i].toLocaleString()} ${unit}</span>
+      <span class="legend-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+// Category
+{
+  const labels = ['Ingredients','Seasoning','Wasteful'];
+  const values = [85000, 78550, 480];
+  const colors = [palette.amber, palette.sky, palette.rose];
+  donut('chartCategory', labels, values, colors);
+  buildLegend('legendCategory', labels, values, colors, 'kg');
+}
+
+// Product
+{
+  const labels = ['แป้ง 10CL','Isolate Soy Protien','Chicken Fat','ถุงมือไนไตร M','ถุงมือไนไตร L'];
+  const values = [130000, 18000, 15550, 330, 150];
+  const colors = [palette.amber, palette.sky, palette.teal, palette.violet, palette.rose];
+  donut('chartProduct', labels, values, colors);
+  buildLegend('legendProduct', labels, values, colors, 'kg');
+}
+
+// Rack
+{
+  const labels = ['C-Celestia','D-Daimond','B-Brooklynton','F-Fuji tale','E-Esther'];
+  const values = [52500, 45000, 32500, 18000, 16030];
+  const colors = [palette.amber, palette.sky, palette.teal, palette.violet, palette.rose];
+  donut('chartRack', labels, values, colors);
+  buildLegend('legendRack', labels, values, colors, 'kg');
+
+  const max = Math.max(...values);
+  const bars = document.getElementById('rackBars');
+  bars.innerHTML = labels.map((label,i)=>{
+    const w = (values[i]/max*100).toFixed(1);
+    return `<div class="rack-bar-row">
+      <div class="rack-name">${label}</div>
+      <div class="rack-track"><div class="rack-fill" style="width:${w}%; background:${colors[i]}"></div></div>
+      <div class="rack-num">${values[i].toLocaleString()} kg</div>
+    </div>`;
+  }).join('');
+}
+
+// COA
+{
+  const labels = ['มีเอกสาร COA','ไม่มีเอกสาร','ไม่ระบุ'];
+  const values = [143, 36, 14];
+  const colors = [palette.teal, palette.rose, palette.grey];
+  donut('chartCoa', labels, values, colors);
+  buildLegend('legendCoa', labels, values, colors, 'รายการ');
+}
+</script>
+
+</body>
+</html>
