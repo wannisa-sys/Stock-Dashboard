@@ -288,9 +288,14 @@ footer{
         <div class="val" id="hdrTotalRecords">-</div>
         <div class="lbl">จำนวนข้อมูลทั้งหมด</div>
       </div>
+      <button class="btn btn-light btn-sm d-flex align-items-center gap-2 no-print" id="btnImportExcel" style="border-radius:10px; font-weight:500; align-self:center;" data-bs-toggle="tooltip" data-bs-placement="bottom" title="อัปโหลดไฟล์ Excel ใหม่ (Sheet: Transection_Stock) เพื่ออัปเดตข้อมูลในหน้านี้">
+        <i class="bi bi-upload"></i>Import Excel
+      </button>
+      <input type="file" id="fileImportInput" accept=".xlsx,.xls" class="d-none">
     </div>
   </div>
 </header>
+<div id="importAlert" class="position-fixed top-0 start-50 translate-middle-x mt-3 no-print" style="z-index:3000; display:none;"></div>
 
 <main class="container-fluid">
 
@@ -557,17 +562,44 @@ function base64ToArrayBuffer(base64) {
    3. DATA LOADING
    --------------------------------------------------------------------- */
 
-// Parse the embedded workbook, filter to Customer_Supplier = "TFA",
-// and normalize each row into a clean internal shape.
-async function loadExcel() {
-  const buffer = base64ToArrayBuffer(EXCEL_BASE64);
+// Shared parser: given a workbook ArrayBuffer, return normalized TFA rows.
+// Used both for the embedded startup data and for user-imported files,
+// so the two paths can never drift apart.
+function parseWorkbookBuffer(buffer) {
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const sheet = workbook.Sheets["Transection_Stock"];
-  const json = XLSX.utils.sheet_to_json(sheet, { defval: null });
+  if (!sheet) throw new Error('ไม่พบ Sheet "Transection_Stock" ในไฟล์นี้');
 
+  const json = XLSX.utils.sheet_to_json(sheet, { defval: null });
   const tfaOnly = json.filter(row => row["Customer_Supplier"] === "TFA");
-  state.rawData = tfaOnly.map(transformRow);
+  if (tfaOnly.length === 0) throw new Error('ไม่พบข้อมูลที่ Customer_Supplier = "TFA" ในไฟล์นี้');
+
+  return tfaOnly.map(transformRow);
+}
+
+// Parse the embedded workbook (startup data) into state.
+async function loadExcel() {
+  const buffer = base64ToArrayBuffer(EXCEL_BASE64);
+  state.rawData = parseWorkbookBuffer(buffer);
   state.filteredData = [...state.rawData];
+}
+
+// Read a user-selected File object (from the Import Excel button) as an
+// ArrayBuffer, parse it with the same logic as the startup loader, and
+// replace the current dataset with it.
+function loadExcelFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        resolve(parseWorkbookBuffer(e.target.result));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์ได้"));
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 // Map a raw sheet row into the internal record shape used across the app.
@@ -976,7 +1008,45 @@ function renderTable(data) {
 }
 
 /* ---------------------------------------------------------------------
-   11. INIT
+   11. IMPORT EXCEL (replace dataset with a user-selected file)
+   --------------------------------------------------------------------- */
+
+// Small dismissible Bootstrap alert shown near the top of the page,
+// used for both success and error feedback on import.
+function showImportAlert(message, type = "success") {
+  const box = document.querySelector("#importAlert");
+  box.style.display = "block";
+  box.innerHTML = `
+    <div class="alert alert-${type} shadow-sm d-flex align-items-center gap-2 mb-0" style="border-radius:12px;">
+      <i class="bi ${type === "success" ? "bi-check-circle" : "bi-exclamation-triangle"}"></i>
+      <span>${message}</span>
+    </div>`;
+  setTimeout(() => { box.style.display = "none"; }, 4000);
+}
+
+// Handle the file input's change event: read + validate + swap the dataset.
+async function importExcelFile(file) {
+  if (!file) return;
+  document.querySelector("#loadingText").textContent = "กำลังนำเข้าข้อมูลจากไฟล์ใหม่...";
+  document.querySelector("#loadingOverlay").classList.remove("hide");
+
+  try {
+    const newRows = await loadExcelFromFile(file);
+    state.rawData = newRows;
+    populateFilterOptions(state.rawData);
+    resetFilters(); // also calls updateAll() with the fresh dataset
+    document.querySelector("#hdrLastUpdate").textContent = formatDate(new Date());
+    showImportAlert(`นำเข้าข้อมูลจากไฟล์ "${file.name}" สำเร็จ (${formatNumber(newRows.length)} รายการ)`, "success");
+  } catch (err) {
+    showImportAlert(err.message || "เกิดข้อผิดพลาดในการนำเข้าไฟล์", "danger");
+  } finally {
+    document.querySelector("#loadingOverlay").classList.add("hide");
+    document.querySelector("#fileImportInput").value = ""; // allow re-selecting the same file
+  }
+}
+
+/* ---------------------------------------------------------------------
+   12. INIT
    --------------------------------------------------------------------- */
 function initTooltips() {
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
@@ -990,6 +1060,14 @@ function wireEvents() {
   });
   document.querySelector("#btnResetFilter").addEventListener("click", resetFilters);
   document.querySelector("#btnPrintDashboard").addEventListener("click", () => window.print());
+
+  // Import Excel: clicking the visible button triggers the hidden file input
+  document.querySelector("#btnImportExcel").addEventListener("click", () => {
+    document.querySelector("#fileImportInput").click();
+  });
+  document.querySelector("#fileImportInput").addEventListener("change", (e) => {
+    importExcelFile(e.target.files[0]);
+  });
 }
 
 async function init() {
